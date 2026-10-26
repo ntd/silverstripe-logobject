@@ -1,0 +1,6 @@
+---
+Name: logobject
+---
+eNTiDi\LogObject\LogObject:
+  create_table_options:
+    MySQLDatabase: 'ENGINE=Archive'

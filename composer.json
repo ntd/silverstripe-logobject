@@ -1,0 +1,45 @@
+{
+    "name": "entidi/silverstripe-logobject",
+    "description": "A DataObjectInterface for storing data using the archive engine of MariaDB/MySQL",
+    "type": "silverstripe-vendormodule",
+    "license": "BSD-3-Clause",
+    "keywords": [
+        "silverstripe",
+        "archive",
+        "mariadb",
+        "mysql",
+        "log",
+        "module",
+        "DataObject"
+    ],
+    "authors": [
+        {
+            "name": "Nicola Fontana",
+            "email": "ntd@entidi.it",
+            "homepage": "https://nicola.entidi.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "silverstripe/framework": "^6.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.3",
+        "squizlabs/php_codesniffer": "^3.7",
+        "silverstripe/standards": "^1",
+        "phpstan/extension-installer": "^1.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "eNTiDi\\LogObject\\": "src/",
+            "eNTiDi\\LogObject\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "lint": "phpcs src/ tests/",
+        "lint-clean": "phpcbf src/ tests/php/ tests/behat/src/",
+        "php-peg": "php thirdparty/php-peg/cli.php src/View/SSTemplateParser.peg > src/View/SSTemplateParser.php"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
