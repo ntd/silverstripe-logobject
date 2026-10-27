@@ -1,0 +1,13 @@
+---
+Name: logobject
+---
+
+# This option works fine on MariaDB and MySQL
+eNTiDi\LogObject\LogObject:
+  create_table_options:
+    MySQLDatabase: 'ENGINE=Archive'
+
+# LogObject is not a DataObject: DbBuild needs to be enhanced
+SilverStripe\Dev\Command\DbBuild:
+  extension:
+    - eNTiDi\LogObject\DbBuildExtension

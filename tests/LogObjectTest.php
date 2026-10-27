@@ -4,10 +4,43 @@ namespace eNTiDi\LogObject;
 
 use LogicException;
 use SilverStripe\Dev\SapphireTest;
+use SilverStripe\ORM\DB;
 use SilverStripe\ORM\FieldType\DBDatetime;
 
 class LogObjectTest extends SapphireTest
 {
+    /**
+     * These tests need a temporary database, even though no fixture
+     * file is used.
+     */
+    protected $usesDatabase = true;
+
+    /**
+     * The ARCHIVE engine is not transactional: log entries cannot be
+     * rolled back, so every test gets a brand new temporary database
+     * (dropped at teardown). This also avoids the TRUNCATE performed
+     * on teardown, which is not supported by the ARCHIVE engine.
+     */
+    protected $usesTransactions = false;
+
+    public static $extra_data_objects = [
+        SampleLog::class,
+    ];
+
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SampleLog::requireTable();
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        $table = SampleLog::tableName();
+        DB::query('DROP TABLE IF EXISTS "' . $table . '"');
+    }
+
     public function testOldDataCanBeRetrieved()
     {
         $now = DBDatetime::now()->getValue();

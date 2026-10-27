@@ -15,8 +15,9 @@ This module provides a dedicated `DataObjectInterface` for log records,
 designed to work with the ARCHIVE storage engine. It enforces
 restrictions that make sense for append-only logs such as:
 
-- no `$fixed_fields` (`ID`, `ClassName`, `Created` and `LastEdited`)
-- no inheritance complexity: just subclass `LogObject` and you are done
-- rows cannot be uniquely identified
-- no variable-length fields, such as `VARCHAR` or `BLOB`
-- existing log entries cannot be deleted
+- cannot delete or update existing rows
+- no `$fixed_fields` apart from `ID`
+- no indexes
+- no relations or foreign keys support
+- no inheritance complexity: subclasses do not merge fields with the
+  parent classes
