@@ -2,14 +2,16 @@
 
 namespace eNTiDi\LogObject;
 
-use eNTiDi\LogObject\LogObject;
 use SilverStripe\Core\ClassInfo;
 use SilverStripe\Core\Extension;
-use SilverStripe\Dev\Command\DbBuild;
 use SilverStripe\ORM\Connect\TableBuilder;
 use SilverStripe\ORM\DB;
 use SilverStripe\PolyExecution\PolyOutput;
 
+/**
+ * Extends `DbBuild` to also build `LogObject` subclasses tables, which
+ * are not `DataObject` and thus are ignored by the default `dev/build`
+ */
 class DbBuildExtension extends Extension
 {
     protected function onAfterBuild($output, $populate, $is_test)
@@ -20,26 +22,27 @@ class DbBuildExtension extends Extension
             return;
         }
 
-        // Similar to what already done in DbBuild for DataObjects
         $output->writeln(['<options=bold>Creating log tables</>', '']);
         $output->startList(PolyOutput::LIST_UNORDERED);
+        foreach ($classes as $class) {
+            $output->writeListItem($class::tableName());
+        }
+        $output->stopList();
+
+        // TableBuilder::buildTables() cannot print the table names
+        // itself (DataObjectSchema::tableName() returns null for
+        // non-DataObjects) and counting the records would require a
+        // slow full table scan on huge log tables, so it is invoked
+        // in quiet mode
         TableBuilder::singleton()->buildTables(
             DB::get_schema(),
             $classes,
             [],
-            $output->isQuiet(),
+            true,
             $is_test,
-            (bool) DbBuild::config()->get('show_record_counts')
+            false
         );
-        $output->stopList();
 
         $output->writeln(['<options=bold>Log tables created!</>', '']);
-
-        foreach ($classes as $class) {
-            LogObject::singleton($class)->onAfterBuild();
-        }
-
-        // XXX: no idea what this does
-        ClassInfo::reset_db_cache();
     }
 }

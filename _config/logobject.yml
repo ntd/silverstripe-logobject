@@ -9,5 +9,5 @@ eNTiDi\LogObject\LogObject:
 
 # LogObject is not a DataObject: DbBuild needs to be enhanced
 SilverStripe\Dev\Command\DbBuild:
-  extension:
+  extensions:
     - eNTiDi\LogObject\DbBuildExtension

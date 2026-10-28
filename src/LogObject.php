@@ -17,9 +17,9 @@ use SilverStripe\ORM\Queries\SQLInsert;
  * the ARCHIVE storage engine of MySQL/MariaDB.
  *
  * Differently from DataObject, LogObject:
- * - hardcoded `ID` field (primary key autoincrement);
- * - no other `$fixed_fields` (`ClassName`, `Created` and `LastEdited`);
- * - no other indexes;
+ * - only the `ID` field is hardcoded (primary key autoincrement);
+ * - no `$fixed_fields` (`ClassName`, `Created` and `LastEdited`);
+ * - no other indexes (this is a requirement of the ARCHIVE engine);
  * - no relations or foreign keys support;
  * - no inheritance complexity (subclasses do not merge fields with the
  *   parent classes);
@@ -115,12 +115,13 @@ class LogObject extends ModelData implements DataObjectInterface
      * Get the specification of a single field.
      *
      * @param string $field The field name
-     * @return array field type specification
+     * @return string The field type specification, or an empty string
+     *                if the field is not declared in $db
      */
-    public static function dbSpec(string $field): array
+    public static function dbSpec(string $field): string
     {
         $fields = static::dbFields();
-        return $fields[$field] ?? [];
+        return $fields[$field] ?? '';
     }
 
     /**
@@ -135,35 +136,42 @@ class LogObject extends ModelData implements DataObjectInterface
 
     /**
      * Check the database schema and update it as necessary.
+     *
+     * The `DB::require_table()` calls used below only *record* the
+     * requested changes, deferring their execution to the end of a
+     * `schemaUpdate()` session: everything must be wrapped to
+     * actually have the schema updated.
      */
     public static function requireTable()
     {
-        $table = static::tableName();
-        $fields = static::dbFields();
-        if ($fields) {
-            DB::require_table(
-                $table,
-                $fields,
-                null,
-                true,
-                static::config()->get('create_table_options'),
-                []
-            );
-        } else {
-            DB::dont_require_table($table);
-        }
+        DB::get_schema()->schemaUpdate(function () {
+            $table = static::tableName();
+            $fields = static::dbFields();
+            if ($fields) {
+                DB::require_table(
+                    $table,
+                    $fields,
+                    null,
+                    true,
+                    static::config()->get('create_table_options'),
+                    []
+                );
+            } else {
+                DB::dont_require_table($table);
+            }
+        });
     }
 
     /**
      * Append this object to its table.
      *
-     * Log rows have no identity and cannot be updated: as the ARCHIVE
-     * engine only supports INSERT and SELECT, writing always appends a
-     * new row, even when called on objects hydrated from the database.
+     * As the ARCHIVE engine only supports INSERT and SELECT, writing
+     * always appends a new row, even when called on objects hydrated
+     * from the database: log rows cannot be updated.
      *
-     * @return bool True on success
+     * @return int The ID of the newly created row
      */
-    public function write(): bool
+    public function write(): int
     {
         $this->extend('onBeforeWrite');
 
@@ -175,11 +183,17 @@ class LogObject extends ModelData implements DataObjectInterface
                 : $obj->nullValue();
         }
 
-        $insert = SQLInsert::create('"' . static::tableName() . '"', $data);
+        $table = static::tableName();
+        $insert = SQLInsert::create('"' . $table . '"', $data);
         $insert->execute();
 
+        // The ID column is auto-generated: keep track of it, so the
+        // object gets linked to its newly created row
+        $id = (int) DB::get_generated_id($table);
+        $this->record['ID'] = $id;
+
         $this->extend('onAfterWrite');
-        return true;
+        return $id;
     }
 
     /**
@@ -292,16 +306,14 @@ class LogObject extends ModelData implements DataObjectInterface
     /**
      * Set the value of the field.
      *
-     * Set the value of a field. Similarly to DataObject, fields not
-     * declared in $db are accepted and stored, but they are ignored
-     * on write.
+     * Unexistent fields are simply ignored.
      *
      * @return $this
      */
     public function setField(string $field, mixed $value): static
     {
         $fields = static::dbFields();
-        if (array_key_exists($field, $fields)) {
+        if (array_key_exists($field, $fields) || $field === 'ID') {
             $this->objCacheClear();
             // Unpack DBField values, as DataObject does
             if ($value instanceof DBField) {
