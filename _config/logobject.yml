@@ -2,10 +2,14 @@
 Name: logobject
 ---
 
-# This option works fine on MariaDB and MySQL
+# This option works fine on MariaDB and MySQL. Use the canonical
+# spelling returned by `SHOW TABLE STATUS` (uppercase on MariaDB and
+# MySQL 8+): a different case makes the schema manager wrongly detect
+# a change and try to ALTER the table on every dev/build, and the
+# ARCHIVE engine does not support ALTER TABLE.
 eNTiDi\LogObject\LogObject:
   create_table_options:
-    MySQLDatabase: 'ENGINE=Archive'
+    MySQLDatabase: 'ENGINE=ARCHIVE'
 
 # LogObject is not a DataObject: DbBuild needs to be enhanced
 SilverStripe\Dev\Command\DbBuild:
