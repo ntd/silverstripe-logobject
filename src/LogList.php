@@ -2,16 +2,10 @@
 
 namespace eNTiDi\LogObject;
 
-use Generator;
 use InvalidArgumentException;
-use LogicException;
 use SilverStripe\Core\Injector\Injectable;
-use SilverStripe\Model\List\ArrayList;
-use SilverStripe\Model\List\Map;
-use SilverStripe\Model\List\SS_List;
 use SilverStripe\ORM\DB;
 use SilverStripe\ORM\Queries\SQLSelect;
-use Traversable;
 
 /**
  * A list of {@link LogObject} records backed by a database query,
@@ -28,14 +22,18 @@ use Traversable;
  *     ->limit(10);
  * </code>
  *
- * Supported filter modifiers are ExactMatch (the default), NotEqual,
- * PartialMatch, StartsWith, EndsWith, GreaterThan, GreaterThanOrEqual,
- * LessThan, LessThanOrEqual, In, NotIn, Null and NotNull. Field values
- * are always bound as query parameters.
+ * Filter fields can specify a modifier, such as in
+ * `filter('When:GreaterThan', $when)`. The supported modifiers are
+ * ExactMatch (the default), NotEqual, PartialMatch, StartsWith,
+ * EndsWith, GreaterThan, GreaterThanOrEqual, LessThan,
+ * LessThanOrEqual, In, NotIn, Null and NotNull. Filter values are
+ * always bound as query parameters.
  *
- * @implements SS_List<LogObject>
+ * As in DataList, multiple filter() calls (and multiple filterAny()
+ * calls) are combined with AND, while the arguments of a single
+ * filterAny() call are combined with OR.
  */
-class LogList implements SS_List
+class LogList implements \Countable, \IteratorAggregate
 {
     use Injectable;
 
@@ -73,22 +71,6 @@ class LogList implements SS_List
         $this->query = clone $this->query;
     }
 
-    /**
-     * Get the class of the listed records.
-     */
-    public function getDataClass(): string
-    {
-        return $this->dataClass;
-    }
-
-    /**
-     * Get the query backing this list, e.g. to inspect or execute it.
-     */
-    public function getQuery(): SQLSelect
-    {
-        return $this->query;
-    }
-
     public function count(): int
     {
         return (int) $this->query->count();
@@ -99,29 +81,31 @@ class LogList implements SS_List
         return $this->count() > 0;
     }
 
-    public function getIterator(): Traversable
+    /**
+     * Iterate the records without loading all of them in memory:
+     * log tables can easily hold a huge number of rows.
+     */
+    public function getIterator(): \Traversable
     {
-        // Use a generator instead of materializing all the records:
-        // log tables can easily hold a huge number of rows
         foreach ($this->query->execute() as $row) {
             yield new $this->dataClass($row);
         }
     }
 
+    /**
+     * Return the records as a plain array.
+     *
+     * @return array<int, LogObject>
+     */
     public function toArray(): array
     {
         return iterator_to_array($this->getIterator(), false);
     }
 
-    public function toNestedArray(): array
-    {
-        return array_map(
-            static fn (LogObject $record) => $record->toMap(),
-            $this->toArray()
-        );
-    }
-
-    public function first(): mixed
+    /**
+     * Return the first record of the list, or null if there is none.
+     */
+    public function first(): ?LogObject
     {
         foreach ($this->getIterator() as $record) {
             return $record;
@@ -130,99 +114,46 @@ class LogList implements SS_List
         return null;
     }
 
-    public function last(): mixed
-    {
-        $records = $this->toArray();
-
-        return $records ? end($records) : null;
-    }
-
-    public function map(string $keyfield = 'ID', string $titlefield = 'Title'): Map
-    {
-        return new Map($this, $keyfield, $titlefield);
-    }
-
-    public function find(string $key, mixed $value): mixed
-    {
-        return $this->filter($key, $value)->first();
-    }
-
-    public function column(string $colName = 'ID'): array
+    /**
+     * Return the value of a single column for all the records,
+     * preserving the filters, the sort and the limit of the list.
+     */
+    public function column(string $field): array
     {
         $query = clone $this->query;
-        $query->setSelect($this->quotedColumn($colName));
+        $query->setSelect($this->quotedColumn($field));
 
         return $query->execute()->column();
     }
 
-    public function columnUnique(string $colName = 'ID'): array
-    {
-        return array_unique($this->column($colName));
-    }
-
-    public function each(callable $callback): SS_List
-    {
-        foreach ($this->getIterator() as $record) {
-            $callback($record, $this);
-        }
-
-        return $this;
-    }
-
-    public function canFilterBy(string $by): bool
-    {
-        return $this->resolveQuotedColumn($by) !== null;
-    }
-
-    public function canSortBy(string $by): bool
-    {
-        return $this->resolveQuotedColumn($by) !== null;
-    }
-
-    public function filter(mixed ...$args): SS_List
+    public function filter(mixed ...$args): static
     {
         return $this->addFilters($this->normaliseFilterArgs($args, __FUNCTION__), false, false);
     }
 
-    public function filterAny(mixed ...$args): SS_List
-    {
-        return $this->addFilters($this->normaliseFilterArgs($args, __FUNCTION__), false, true);
-    }
-
-    public function exclude(mixed ...$args): SS_List
+    public function exclude(mixed ...$args): static
     {
         return $this->addFilters($this->normaliseFilterArgs($args, __FUNCTION__), true, false);
     }
 
-    public function excludeAny(mixed ...$args): SS_List
+    public function filterAny(mixed ...$args): static
+    {
+        return $this->addFilters($this->normaliseFilterArgs($args, __FUNCTION__), false, true);
+    }
+
+    public function excludeAny(mixed ...$args): static
     {
         return $this->addFilters($this->normaliseFilterArgs($args, __FUNCTION__), true, true);
     }
 
-    public function filterByCallback(callable $callback): SS_List
-    {
-        $results = array_filter($this->toArray(), fn ($record) => $callback($record, $this));
-
-        return ArrayList::create(array_values($results));
-    }
-
-    public function byID(mixed $id): mixed
-    {
-        throw new LogicException(sprintf(
-            'Rows of %s cannot be uniquely identified: byID() is not available',
-            $this->dataClass
-        ));
-    }
-
-    public function byIDs(array $ids): SS_List
-    {
-        throw new LogicException(sprintf(
-            'Rows of %s cannot be uniquely identified: byIDs() is not available',
-            $this->dataClass
-        ));
-    }
-
-    public function sort(mixed ...$args): SS_List
+    /**
+     * Return a new list, sorted by one or more fields.
+     *
+     * @example $list->sort('When')
+     * @example $list->sort('When', 'DESC')
+     * @example $list->sort(['When' => 'DESC', 'Type' => 'ASC'])
+     */
+    public function sort(mixed ...$args): static
     {
         $list = clone $this;
         $list->query->setOrderBy($this->normaliseSortArgs($args));
@@ -230,15 +161,11 @@ class LogList implements SS_List
         return $list;
     }
 
-    public function reverse(): SS_List
-    {
-        $list = clone $this;
-        $list->query->reverseOrderBy();
-
-        return $list;
-    }
-
-    public function limit(?int $length, int $offset = 0): SS_List
+    /**
+     * Return a new list including at most $length records, skipping
+     * the first $offset ones.
+     */
+    public function limit(?int $length, int $offset = 0): static
     {
         $list = clone $this;
         $list->query->setLimit($length, $offset);
@@ -247,63 +174,21 @@ class LogList implements SS_List
     }
 
     /**
-     * Log tables are append-only: new records can only be created
-     * with LogObject::write(), so they cannot be added to a list.
-     */
-    public function add(mixed $item): void
-    {
-        throw new LogicException(sprintf(
-            '%s is backed by a query: create new records with %s::create() and write() instead',
-            static::class,
-            $this->dataClass
-        ));
-    }
-
-    /**
-     * Log entries cannot be removed: the ARCHIVE engine does not
-     * support the DELETE statement.
-     */
-    public function remove(mixed $item)
-    {
-        throw new LogicException('LogList items cannot be removed: log tables are append-only.');
-    }
-
-    /**
-     * Log lists are generated by a query, so they can only be
-     * accessed by offset in a read-only way.
-     */
-    public function offsetExists(mixed $offset): bool
-    {
-        return array_key_exists($offset, $this->toArray());
-    }
-
-    public function offsetGet(mixed $offset): mixed
-    {
-        return $this->toArray()[$offset] ?? null;
-    }
-
-    public function offsetSet(mixed $offset, mixed $value): void
-    {
-        throw new LogicException('LogList is read-only: items cannot be modified.');
-    }
-
-    public function offsetUnset(mixed $offset): void
-    {
-        throw new LogicException('LogList is read-only: items cannot be removed.');
-    }
-
-    /**
-     * Normalise the arguments accepted by filter(), exclude() and
-     * their Any() variants to a field => value map.
+     * Normalise the arguments accepted by the filter methods to a
+     * field name => value map.
      *
-     * @param array $args
      * @param string $function Name of the calling method, for error messages
-     * @return array
      */
     private function normaliseFilterArgs(array $args, string $function): array
     {
         if (count($args) === 1) {
             $filters = array_values($args)[0];
+
+            // filter('Message:Null') is a shorthand for
+            // filter('Message:Null', null)
+            if (is_string($filters)) {
+                return [$filters => null];
+            }
             if (!is_array($filters)) {
                 throw new InvalidArgumentException(sprintf(
                     '%s() expects an array of filters, or a field name and a value',
@@ -329,7 +214,7 @@ class LogList implements SS_List
      * with AND (the default) or OR (the $any variants) and negating
      * them when required.
      */
-    private function addFilters(array $filters, bool $negate, bool $any): SS_List
+    private function addFilters(array $filters, bool $negate, bool $any): static
     {
         $predicates = [];
         foreach ($filters as $name => $value) {
@@ -414,14 +299,13 @@ class LogList implements SS_List
     }
 
     /**
-     * Build an exact match predicate, either = or <> (or IN/NOT IN
-     * when an array of values is given).
+     * Build an exact match predicate, either `=` or `<>` (or `IN` /
+     * `NOT IN` when an array of values is given).
      *
      * @return array Two elements: the SQL predicate and its parameters
      */
     private function exactPredicate(string $column, mixed $value, bool $negate = false): array
     {
-        $operator = $negate ? '<>' : '=';
         if ($value === null) {
             return [$column . ' IS ' . ($negate ? 'NOT ' : '') . 'NULL', []];
         }
@@ -429,12 +313,12 @@ class LogList implements SS_List
             return $this->inPredicate($column, $value, $negate);
         }
 
-        return [sprintf('%s %s ?', $column, $operator), [$value]];
+        return [sprintf('%s %s ?', $column, $negate ? '<>' : '='), [$value]];
     }
 
     /**
-     * Build a LIKE predicate, prepending and appending wildcards to
-     * the (scalar) value as requested.
+     * Build a LIKE predicate, prepending and appending the wildcards
+     * to the (scalar) value as requested.
      *
      * @return array Two elements: the SQL predicate and its parameters
      */
@@ -537,10 +421,11 @@ class LogList implements SS_List
     }
 
     /**
-     * Get the quoted column name for a field declared in $db, or null
-     * if the field is not available.
+     * Get the quoted column name for a field declared in $db. This
+     * also protects the generated SQL against SQL injection, as the
+     * field names are the only values going into the SQL string.
      */
-    private function resolveQuotedColumn(string $field): ?string
+    private function quotedColumn(string $field): string
     {
         foreach ($this->dataClass::dbFields() as $name => $spec) {
             if (strcasecmp($name, $field) === 0) {
@@ -548,24 +433,10 @@ class LogList implements SS_List
             }
         }
 
-        return null;
-    }
-
-    /**
-     * Same as resolveQuotedColumn(), but throwing an exception on
-     * unknown fields: this also protects the generated SQL.
-     */
-    private function quotedColumn(string $field): string
-    {
-        $column = $this->resolveQuotedColumn($field);
-        if ($column === null) {
-            throw new InvalidArgumentException(sprintf(
-                'Cannot use "%s": not a database field of %s',
-                $field,
-                $this->dataClass
-            ));
-        }
-
-        return $column;
+        throw new InvalidArgumentException(sprintf(
+            'Cannot use "%s": not a database field of %s',
+            $field,
+            $this->dataClass
+        ));
     }
 }
