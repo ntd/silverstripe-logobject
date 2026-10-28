@@ -102,6 +102,29 @@ class LogObject extends ModelData implements DataObjectInterface
     }
 
     /**
+     * Get the `create_table_options` array.
+     * Convert the engine name to uppercase to avoid mismatches with
+     * `SHOW TABLE STATUS`, that returns it in uppercase too.
+     *
+     * @return array
+     */
+    public static function createTableOptions(): array
+    {
+        $options = (array) static::config()->get('create_table_options');
+        if (array_key_exists('MySQLDatabase', $options)) {
+            $normalizer = function ($matches) {
+                return $matches[1].'='.strtoupper($matches[2]);
+            };
+            $options['MySQLDatabase'] = preg_replace_callback(
+                '/(ENGINE)\s*=\s*(\w+)/i',
+                $normalizer,
+                $options['MySQLDatabase']
+            );
+        }
+        return $options;
+    }
+
+    /**
      * Get the field specifications declared in $db.
      *
      * @return array Map of field name to field type specification
@@ -153,7 +176,7 @@ class LogObject extends ModelData implements DataObjectInterface
                     $fields,
                     null,
                     true,
-                    static::config()->get('create_table_options'),
+                    static::createTableOptions(),
                     []
                 );
             } else {

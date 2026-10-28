@@ -80,12 +80,15 @@ class LogObjectTest extends SapphireTest
 
     public function testTableIsCreatedWithArchiveEngine()
     {
+        $options = LogObject::createTableOptions();
+        // Actually only `MySQLDatabase` (MariaDB and MySQL) is tested:
+        // this could change in the future
+        $this->assertArrayHasKey('MySQLDatabase', $options);
+        // Check the engine name is in uppercase
+        $this->assertStringContainsString('ARCHIVE', $options['MySQLDatabase']);
+
         $status = DB::query("SHOW TABLE STATUS LIKE 'SampleLog'")->record();
-        $this->assertEquals(
-            'ARCHIVE',
-            strtoupper($status['Engine']),
-            'The SampleLog table must use the ARCHIVE engine'
-        );
+        $this->assertEquals('ARCHIVE', $status['Engine']);
 
         // Apart from `ID`, no other fixed field must be present
         $columns = array_keys(DB::field_list('SampleLog'));
