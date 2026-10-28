@@ -34,7 +34,7 @@ class LogObjectTest extends SapphireTest
 
     public function testExistingDataCanBeRetrieved()
     {
-        $when = self::WHEN;
+        $when = LogObjectTest::WHEN;
         $message = 'This is a test message';
         $type = 'Info';
 
@@ -68,7 +68,7 @@ class LogObjectTest extends SapphireTest
     public function testExistingDataCannotBeDeleted()
     {
         $row = SampleLog::create([
-            'When' => self::WHEN,
+            'When' => LogObjectTest::WHEN,
             'Message' => 'This error cannot be deleted',
             'Type' => 'Error',
         ]);
@@ -121,7 +121,7 @@ class LogObjectTest extends SapphireTest
     public function testWriteAlwaysAppends()
     {
         $firstId = SampleLog::create([
-            'When' => self::WHEN,
+            'When' => LogObjectTest::WHEN,
             'Message' => 'only one',
             'Type' => 'Debug',
         ])->write();
@@ -143,7 +143,7 @@ class LogObjectTest extends SapphireTest
     public function testMagicAccessors()
     {
         $row = SampleLog::create([
-            'When' => self::WHEN,
+            'When' => LogObjectTest::WHEN,
             'Message' => 'hello',
             'Type' => 'Warning',
         ]);
@@ -153,7 +153,7 @@ class LogObjectTest extends SapphireTest
         $this->assertTrue($row->hasField('Message'));
         $this->assertFalse($row->hasField('Bogus'));
         $this->assertEquals([
-            'When' => self::WHEN,
+            'When' => LogObjectTest::WHEN,
             'Message' => 'hello',
             'Type' => 'Warning',
         ], $row->toMap());
@@ -162,14 +162,14 @@ class LogObjectTest extends SapphireTest
         $row->write();
         $fetched = SampleLog::get()->first();
         $this->assertEquals('hello', $fetched->Message);
-        $this->assertEquals(self::WHEN, $fetched->When);
+        $this->assertEquals(LogObjectTest::WHEN, $fetched->When);
         $this->assertEquals('Warning', $fetched->Type);
     }
 
     public function testDbObjectAndCasting()
     {
         $row = SampleLog::create([
-            'When' => self::WHEN,
+            'When' => LogObjectTest::WHEN,
             'Message' => 'hello',
             'Type' => 'Warning',
         ]);
@@ -187,9 +187,9 @@ class LogObjectTest extends SapphireTest
         $this->assertEquals('casted', $row->Message);
 
         // DBField values are unpacked on assignment, as DataObject does
-        $row->When = DBField::create_field('Datetime', self::WHEN);
-        $this->assertEquals(self::WHEN, $row->When);
+        $row->When = DBField::create_field('Datetime', LogObjectTest::WHEN);
+        $this->assertEquals(LogObjectTest::WHEN, $row->When);
         $row->write();
-        $this->assertEquals(1, SampleLog::get()->filter('When', self::WHEN)->count());
+        $this->assertEquals(1, SampleLog::get()->filter('When', LogObjectTest::WHEN)->count());
     }
 }
